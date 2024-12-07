@@ -32,7 +32,7 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     'accounts',
-    'events',
+    'utakais',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
