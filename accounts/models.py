@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib.auth.models import BaseUserManager,AbstractBaseUser,PermissionsMixin
 from django.core.validators import RegexValidator
 from django.db import models
@@ -71,55 +72,55 @@ class User(AbstractBaseUser,PermissionsMixin):
             RegexValidator(
                 r'^[a-zA-Z0-9_]+$', "半角英数字、アンダーラインのみ使用できます。"
                 )
-        ]
+        ],
     )
     email=models.EmailField(
         verbose_name="メールアドレス",
         null=False,
         blank=False,
-        unique=True
+        unique=True,
     )
     first_name=models.CharField(
-        verbose_name="名前",
+        verbose_name="名",
         null=True,
         blank=False,
-        max_length=50
+        max_length=50,
     )
     last_name=models.CharField(
-        verbose_name="姓（空欄可）",
+        verbose_name="姓",
         null=True,
         blank=True,
-        max_length=50
+        max_length=50,
     )
     is_active=models.BooleanField(
         verbose_name="active",
-        default=True
+        default=True,
     )
     is_member=models.BooleanField(
         verbose_name="member",
-        default=False
+        default=False,
     )
     is_staff=models.BooleanField(
         verbose_name="staff",
-        default=False
+        default=False,
     )
     is_superuser=models.BooleanField(
         verbose_name="superuser",
-        default=False
+        default=False,
     )
     bio=models.TextField(
         verbose_name="自己紹介",
         max_length=140,
         null=True,
-        blank=True
+        blank=True,
     )
     created_at=models.DateTimeField(
         verbose_name="アカウント作成日",
-        auto_now_add=True
+        auto_now_add=True,
     )
     updated_at=models.DateTimeField(
         verbose_name="更新日",
-        auto_now=True
+        auto_now=True,
     )
 
     objects = UserManager()
