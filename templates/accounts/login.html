@@ -1,15 +1,19 @@
 {% extends 'base.html' %}
 
 {% block head_title %}
-サインアップ
+ログイン
 {% endblock %}
 
 {% block body_title %}
-<div class="h1">アカウント作成</div>
+<div class="h1">ログイン</div>
 {% endblock %}
 
 {% block content %}
 <div>
+    <p>
+    アカウントをお持ちでない方は
+    <a href="{% url 'accounts:signup' %}" class="btn btn-secondary">こちら</a>
+    </p>
     <br>
     <form method="POST">
       {% csrf_token %}
@@ -25,8 +29,7 @@
       <br>
       {% endfor %}
       <div class="mt-3">
-        <button type="submit" class="btn btn-primary">作成</button>
-        <a href="{% url 'accounts:login' %}" class="btn btn-secondary">戻る</a>
+        <button type="submit" class="btn btn-primary">ログイン</button>
       </div>
     </form>
   </div>

@@ -1,6 +1,6 @@
 from .models import User
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import UserCreationForm,AuthenticationForm
 
 class SignupForm(UserCreationForm):
     class Meta:
@@ -14,3 +14,7 @@ class SignupForm(UserCreationForm):
         widgets = {
             'last_name': forms.TextInput(attrs={'placeholder': "空欄可"}),
         }
+
+class LoginForm(AuthenticationForm):
+    class Meta:
+        model = User
