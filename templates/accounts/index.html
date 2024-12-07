@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% if user.is_authenticated%}
+<div>{{ request.user.last_name }}{{ request.user.first_name }}さん、ようこそ
+    <br>
+    <form action="{% url 'accounts:logout' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">ログアウト</button>
+    </form>
+</div>
+{% else %}
+<div>
+    <a href='{% url "accounts:login" %}'>ログイン</a>
+    <a href='{% url "accounts:signup" %}'>アカウント作成</a>
+    </div>
+{% endif %}
+{% endblock %}
