@@ -1,13 +1,14 @@
 from .forms import LoginForm,SignupForm
+from .models import User
 from django.contrib.auth import authenticate,login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView as BaseLoginView, LogoutView as BaseLogoutView
 from django.shortcuts import render
 from django.urls import reverse_lazy
-from django.views.generic import CreateView,TemplateView
+from django.views.generic import CreateView,DetailView,TemplateView
 
 class IndexView(LoginRequiredMixin,TemplateView):
-     template_name = 'accounts/index.html'
+    template_name = 'accounts/index.html'
 
 class SignupView(CreateView):
     form_class = SignupForm
@@ -32,3 +33,20 @@ class LoginView(BaseLoginView):
 
 class LogoutView(BaseLogoutView):
     success_url = reverse_lazy("index")
+
+class ProfileView(DetailView):
+    model = User
+    template_name= 'accounts/profile.html'
+    context_object_name = 'viewed_user'
+
+    def get_queryset(self):
+        return User.objects.filter(is_active=True) 
+    
+    def get_object(self, queryset=None):
+        queryset = self.get_queryset()
+        return queryset.get(account_id=self.kwargs['account_id'])
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['tankas'] = self.object.tanka_set.filter()
+        return context
