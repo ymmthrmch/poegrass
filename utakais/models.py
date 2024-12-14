@@ -3,13 +3,14 @@ from datetime import datetime,timedelta
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import UniqueConstraint
-from django.utils import timezone 
-from django.utils.timezone import localtime
+from django.utils import timezone
+from poegrass.utils import japanese_strftime
 
 class Event(models.Model):
     title = models.CharField(
         verbose_name="タイトル",
         max_length=63,
+        blank=True,
         )
     start_time = models.DateTimeField(
         verbose_name="開始時刻",
@@ -17,7 +18,7 @@ class Event(models.Model):
     )
     location = models.CharField(
         verbose_name="場所",
-        default="未定",
+        blank=True,
         max_length=63,
         )
     organizer = models.ForeignKey(
@@ -29,9 +30,28 @@ class Event(models.Model):
         )
     deadline = models.DateTimeField(
         verbose_name="提出締切",
+        blank=True,
+        null=True,
+    )
+    STATUS_CHOICES = [
+        ('public', '公開'),
+        ('limited', '限定公開'),
+        ('private', '非公開'),
+    ]
+    ann_status = models.CharField(
+        verbose_name="告知公開設定",
+        max_length=7,
+        choices=STATUS_CHOICES,
+        default='public'
+        )
+    rec_status = models.CharField(
+        verbose_name="記録公開設定",
+        max_length=7,
+        choices=STATUS_CHOICES,
+        default='private'
     )
     ann_desc = models.TextField(
-        verbose_name="告知用説明",
+        verbose_name="告知説明",
         max_length=511,
         blank=True,
         null=True,
@@ -41,12 +61,41 @@ class Event(models.Model):
         default=False,
     )
     rec_desc = models.TextField(
-        verbose_name="記録用説明",
+        verbose_name="記録説明",
         max_length=511,
         blank=True,
         null=True,
     )
 
+    @property
+    def ann_is_public(self):
+        return self.ann_status == 'public'
+    
+    @property
+    def ann_is_limited(self):
+        return self.ann_status == 'limited'
+    
+    @property
+    def ann_is_private(self):
+        return self.ann_status == 'private'
+    
+    @property
+    def rec_is_public(self):
+        return self.rec_status == 'public'
+    
+    @property
+    def rec_is_limited(self):
+        return self.rec_status == 'limited'
+    
+    @property
+    def rec_is_private(self):
+        return self.rec_status == 'private'
+    
+    @property
+    def is_past(self):
+        now = timezone.now()
+        return now > self.start_time
+    
     def clean(self):
         if self.start_time and self.deadline:
             if self.start_time < self.deadline:
@@ -56,10 +105,14 @@ class Event(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.title and self.start_time:
-            self.title = localtime(self.start_time).strftime("%Y年%m月%D日の歌会")
-        super().save(*args, **kwargs)
+            date = self.start_time
+            self.title = japanese_strftime(date, "%Y年%m月%d日（%a）の歌会")
         if not self.deadline and self.start_time:
             self.deadline = self.start_time - timedelta(hours=6)
+        if not self.location:
+            self.location = "未定"
+        if self.is_past==True:
+            self.is_ann_public = False
         super().save(*args, **kwargs)
             
     def __str__(self):
@@ -111,12 +164,15 @@ class Tanka(models.Model):
         auto_now_add=True,
     )
 
+    @property
     def is_public(self):
         return self.status == 'public'
     
+    @property
     def is_limited(self):
         return self.status == 'limited'
     
+    @property
     def is_private(self):
         return self.status == 'private'
     
