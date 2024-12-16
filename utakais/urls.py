@@ -5,5 +5,6 @@ from django.urls import path
 app_name = "utakais"
 
 urlpatterns = [
-    path('',views.IndexView.as_view(),name="index"),
+    path('',views.EventIndexView.as_view(),name="event_index"),
+    path('<int:pk>/',views.EventDetailView.as_view(),name='event_detail'),
 ]

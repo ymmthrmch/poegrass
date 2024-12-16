@@ -7,6 +7,7 @@ class UserAdmin(admin.ModelAdmin):
         "first_name",
         "last_name",
         "email",
+        "is_member"
     ]
 
 admin.site.register(User, UserAdmin)

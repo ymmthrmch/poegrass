@@ -16,6 +16,11 @@ class Event(models.Model):
         verbose_name="開始時刻",
         default=timezone.now,
     )
+    end_time = models.DateTimeField(
+        verbose_name="終了時刻",
+        blank=True,
+        null=True,
+    )
     location = models.CharField(
         verbose_name="場所",
         blank=True,
@@ -102,6 +107,11 @@ class Event(models.Model):
                 raise ValidationError(
                     {'deadline': "提出締切は開始時刻よりも後ろにはできません。"}
                 )
+        if self.start_time and self.end_time:
+            if self.end_time < self.start_time:
+                raise ValidationError(
+                    {'end_time': "終了時刻は開始時刻よりも前にはできません。"}
+                )
     
     def save(self, *args, **kwargs):
         if not self.title and self.start_time:
@@ -112,7 +122,11 @@ class Event(models.Model):
         if not self.location:
             self.location = "未定"
         if self.is_past==True:
-            self.is_ann_public = False
+            self.ann_status = "private"
+        if self.ann_is_public or self.ann_is_limited or not self.rec_status:
+            self.rec_status = "private"
+        if not self.ann_desc:
+            self.ann_desc = "特になし"
         super().save(*args, **kwargs)
             
     def __str__(self):

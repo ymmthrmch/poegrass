@@ -8,7 +8,8 @@ class EventAdmin(admin.ModelAdmin):
         'title',
         'location',
         'deadline',
-        'ann_desc'
+        'ann_desc',
+        'ann_status',
     ]
 
 class TankaAdmin(admin.ModelAdmin):
