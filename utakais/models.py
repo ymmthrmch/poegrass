@@ -19,7 +19,6 @@ class Event(models.Model):
     end_time = models.DateTimeField(
         verbose_name="終了時刻",
         blank=True,
-        null=True,
     )
     location = models.CharField(
         verbose_name="場所",
@@ -36,7 +35,6 @@ class Event(models.Model):
     deadline = models.DateTimeField(
         verbose_name="提出締切",
         blank=True,
-        null=True,
     )
     STATUS_CHOICES = [
         ('public', '公開'),
@@ -118,13 +116,11 @@ class Event(models.Model):
             date = self.start_time
             self.title = japanese_strftime(date, "%Y年%m月%d日（%a）の歌会")
         if not self.deadline and self.start_time:
-            self.deadline = self.start_time - timedelta(hours=6)
+            self.deadline = self.start_time - timedelta(hours=3)
         if not self.location:
             self.location = "未定"
-        if self.is_past==True:
-            self.ann_status = "private"
-        if self.ann_is_public or self.ann_is_limited or not self.rec_status:
-            self.rec_status = "private"
+        if not self.end_time:
+            self.end_time = self.start_time + timedelta(hours=3)
         if not self.ann_desc:
             self.ann_desc = "特になし"
         super().save(*args, **kwargs)
@@ -132,36 +128,22 @@ class Event(models.Model):
     def __str__(self):
         return self.title
 
-class Participant(models.Model):
-    user = models.ForeignKey(
-        User,
-        verbose_name="参加者",
-        on_delete=models.CASCADE,
-        )
-    event = models.ForeignKey(
-        Event,
-        verbose_name="参加イベント",
-        on_delete=models.CASCADE,
-        )
-    is_observer = models.BooleanField(
-        verbose_name="見学者フラグ",
-        default=False,
-        )
-
-    class Meta:
-        constraints = [
-            UniqueConstraint(fields=['user', 'event'], name='unique_user_event')
-        ]
-
 class Tanka(models.Model):
     content = models.TextField(
         verbose_name="詠草",
     )
     author = models.ForeignKey(
         User,
-        verbose_name="作者",
+        verbose_name="筆名",
         on_delete=models.CASCADE,
+        null=True,
         )
+    guest_author = models.CharField(
+        verbose_name="ゲスト筆名",
+        default="",
+        max_length=63,
+        blank=True,
+    )
     STATUS_CHOICES = [
         ('public', '公開'),
         ('limited', '限定公開'),
@@ -178,6 +160,17 @@ class Tanka(models.Model):
         auto_now_add=True,
     )
 
+    def clean(self):
+        if not self.author and self.guest_author == "":
+            raise ValidationError(
+                {'guest_author':"ログインするかゲスト筆名を入力してください。"}
+            )
+        
+    def save(self,*args,**kwargs):
+        if self.author:
+            self.guest_author = ""
+        super().save(*args,**kwargs)
+
     @property
     def is_public(self):
         return self.status == 'public'
@@ -191,7 +184,64 @@ class Tanka(models.Model):
         return self.status == 'private'
     
     def __str__(self):
-        return self.content[:5] if self.content else ""
+        return self.content if self.content else ""
+    
+class Participant(models.Model):
+    user = models.ForeignKey(
+        User,
+        verbose_name="参加者",
+        on_delete=models.CASCADE,
+        null=True,
+        )
+    guest_user = models.CharField(
+        verbose_name="ゲスト参加者",
+        default = "",
+        max_length=63,
+    )
+    guest_contact = models.EmailField(
+        verbose_name="ゲスト参加者のメールアドレス",
+    )
+    event = models.ForeignKey(
+        Event,
+        verbose_name="参加イベント",
+        on_delete=models.CASCADE,
+        )
+    tanka = models.ForeignKey(
+        Tanka,
+        verbose_name="詠草",
+        null=True,
+        on_delete=models.SET_NULL,
+    )
+    is_observer = models.BooleanField(
+        verbose_name="見学者フラグ",
+        default=False,
+        )
+    
+    def clean(self):
+        if not self.user and self.guest_user == "":
+            raise ValidationError(
+                {'guest_user': "ログインするかゲスト筆名を記入してください。"}
+            )
+        if self.tanka and self.user:
+            if self.tanka.author != self.user and self.tanka.guest_author != self.user.name :
+                raise ValidationError(
+                    {'tanka':"詠草の筆名と参加者は一致していなければいけません。"}
+                )
+        if self.tanka and self.guest_user:
+            if self.tanka.author.name != self.guest_user and self.tanka.guest_author != self.guest_user:
+                raise ValidationError(
+                    {'tanka':"詠草の筆名と参加者は一致していなければいけません。"}
+                )
+
+    def save(self,*args,**kwargs):
+        if self.user:
+            self.guest_user = ""
+        super().save(*args,**kwargs)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=['user', 'event'], name='unique_user_event')
+        ]
 
 class TankaList(models.Model):
     title = models.CharField(

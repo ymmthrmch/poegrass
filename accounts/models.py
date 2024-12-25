@@ -80,16 +80,10 @@ class User(AbstractBaseUser,PermissionsMixin):
         blank=False,
         unique=True,
     )
-    first_name=models.CharField(
-        verbose_name="名",
+    name=models.CharField(
+        verbose_name="名前",
         null=True,
         blank=False,
-        max_length=50,
-    )
-    last_name=models.CharField(
-        verbose_name="姓",
-        null=True,
-        blank=True,
         max_length=50,
     )
     is_active=models.BooleanField(

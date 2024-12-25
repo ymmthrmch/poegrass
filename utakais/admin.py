@@ -1,4 +1,4 @@
-from .models import Event,Tanka,TankaList
+from .models import Event,Participant,Tanka,TankaList
 from django.contrib import admin
 
 class EventAdmin(admin.ModelAdmin):
@@ -16,6 +16,7 @@ class TankaAdmin(admin.ModelAdmin):
     fields=[
         'content',
         'author',
+        'guest_author',
         'status',
     ]
 
@@ -26,6 +27,11 @@ class TankaListAdmin(admin.ModelAdmin):
         'is_public',
     ]
 
+class ParticipantInline(admin.TabularInline):
+    model = Participant
+    extra = 1
+
 admin.site.register(Event,EventAdmin)
 admin.site.register(Tanka,TankaAdmin)
 admin.site.register(TankaList, TankaListAdmin)
+admin.site.register(Participant)

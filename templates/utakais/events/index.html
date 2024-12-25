@@ -10,13 +10,18 @@
 {% endblock %}
 {% block content %}
     {% if not user.is_authenticated or not user.is_member %}
-        ログインしていないか会員でないため、公開の歌会のみ表示されています。<br>
+        ゲストユーザーのため、公開の歌会のみ表示されています。<br>
     {% endif %}
     {% if events %} 
+    <div>
         {% for event in events %}
             <a href="{% url 'utakais:event_detail' pk=event.pk %}">{{ event.title }}</a><br>
         {% endfor %}
+    </div>
     {% else %}
         現在予定されている歌会はありません。
+    {% endif %}
+    {% if user.is_member %}
+        <a href="{% url 'utakais:event_create' %}">歌会を作成</a><br>
     {% endif %}
 {% endblock %}

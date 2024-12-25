@@ -8,12 +8,8 @@ class SignupForm(UserCreationForm):
         fields = [
             'email',
             'account_id',
-            'last_name',
-            'first_name',
+            'name',
         ]
-        widgets = {
-            'last_name': forms.TextInput(attrs={'placeholder': "空欄可"}),
-        }
 
 class LoginForm(AuthenticationForm):
     class Meta:

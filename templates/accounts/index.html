@@ -2,7 +2,7 @@
 
 {% block content %}
 {% if user.is_authenticated%}
-<div>{{ request.user.last_name }}{{ request.user.first_name }}さん、ようこそ
+<div>{{ request.user.name }}さん、ようこそ
     <br>
     <form action="{% url 'accounts:logout' %}" method="post">
         {% csrf_token %}

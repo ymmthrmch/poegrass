@@ -4,8 +4,7 @@ from django.contrib import admin
 class UserAdmin(admin.ModelAdmin):
     fields=[
         "account_id",
-        "first_name",
-        "last_name",
+        "name",
         "email",
         "is_member"
     ]
