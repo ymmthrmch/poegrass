@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-=^5#hw9vpd(0ih#x+3#)whwd2s5)%!$wp8^oa*t=27bw0p6f0!'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = True  
 
 ALLOWED_HOSTS = []
 
@@ -125,6 +125,12 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Authentication system
+
 AUTH_USER_MODEL = 'accounts.User'
 LOGIN_REDIRECT_URL = "accounts:index"
 LOGOUT_REDIRECT_URL = "accounts:login"
+
+# Media files
+
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'

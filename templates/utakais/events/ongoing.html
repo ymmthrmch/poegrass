@@ -20,15 +20,5 @@
         詠草提出締切：{{ event.deadline }}<br>
         コメント：{{ event.ann_desc }}
     </div>
-    <div>
-        <form action="{{ request.path }}" method="POST">
-            {% csrf_token %}
-            {{ form.as_p }}
-            {% if submitted %}
-                <p>詠草提出済み。再提出で修正できます。</p>
-            {% endif %}
-            <button type='submit' name='submit_tanka'>提出</button>
-        </form>
-        <a href="{% url 'utakais:events_index' %}">戻る</a>
-    </div>
+    
 {% endblock %}

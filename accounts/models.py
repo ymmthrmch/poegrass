@@ -82,7 +82,8 @@ class User(AbstractBaseUser,PermissionsMixin):
     )
     name=models.CharField(
         verbose_name="名前",
-        null=True,
+        default="",
+        null=False,
         blank=False,
         max_length=50,
     )

@@ -1,10 +1,18 @@
 from accounts.models import User
 from datetime import datetime,timedelta
+from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.files import File
 from django.db import models
 from django.db.models import UniqueConstraint
 from django.utils import timezone
-from poegrass.utils import japanese_strftime
+from django.shortcuts import get_object_or_404
+from docx import Document
+from docx.shared import Pt
+import mojimoji
+from pathlib import Path
+from poegrass.utils import japanese_strftime, make_ruby_whole_sentence
+import random
 
 class Event(models.Model):
     title = models.CharField(
@@ -15,11 +23,11 @@ class Event(models.Model):
     start_time = models.DateTimeField(
         verbose_name="開始時刻",
         default=timezone.now,
-    )
+        )
     end_time = models.DateTimeField(
         verbose_name="終了時刻",
         blank=True,
-    )
+        )
     location = models.CharField(
         verbose_name="場所",
         blank=True,
@@ -35,12 +43,12 @@ class Event(models.Model):
     deadline = models.DateTimeField(
         verbose_name="提出締切",
         blank=True,
-    )
+        )
     STATUS_CHOICES = [
         ('public', '公開'),
         ('limited', '限定公開'),
         ('private', '非公開'),
-    ]
+        ]
     ann_status = models.CharField(
         verbose_name="告知公開設定",
         max_length=7,
@@ -52,7 +60,7 @@ class Event(models.Model):
         max_length=7,
         choices=STATUS_CHOICES,
         default='private'
-    )
+        )
     ann_desc = models.TextField(
         verbose_name="告知説明",
         max_length=511,
@@ -62,13 +70,28 @@ class Event(models.Model):
     ended = models.BooleanField(
         verbose_name="終了済み",
         default=False,
-    )
+        )
     rec_desc = models.TextField(
         verbose_name="記録説明",
         max_length=511,
         blank=True,
         null=True,
-    )
+        )
+    def file_path(instance,filename):
+        """eisou_doc,eisou_pdfのupload_toを設定"""
+        return f'events/{instance.pk}/{filename}'
+    eisou_doc = models.FileField(
+        null=True,
+        upload_to=file_path,
+        )
+    eisou_pdf = models.FileField(
+        null=True,
+        upload_to=file_path,
+        )
+    eisou_number = models.PositiveIntegerField(
+        verbose_name="詠草一覧版数",
+        default=0,
+        )
 
     @property
     def ann_is_public(self):
@@ -110,19 +133,128 @@ class Event(models.Model):
                 raise ValidationError(
                     {'end_time': "終了時刻は開始時刻よりも前にはできません。"}
                 )
+            
+    def generate_doc(self):
+        """
+        詠草一覧のdocx,pdfファイルを生成する
+        """
+        title = self.title
+        organizer = self.organizer.name
+        date = japanese_strftime(timezone.localtime(self.start_time),"%Y年%m月%d日（%a）")  # 例: イベント日が含まれる場合
+        participants = Participant.objects.filter(event=self).exclude(user=self.organizer)
+        tankas = [
+            f'{tanka.content}' for tanka in (participant.tanka for participant in participants if participant.tanka)
+        ]
+
+        # ドキュメントの作成
+        sample_path = settings.MEDIA_ROOT / 'events' / 'samples' / 'utakai_sample.docx'
+        doc = Document(sample_path)
+
+        # タイトルの追加
+        self.add_title(doc, title)
+
+        # 参加者の追加
+        self.add_info(doc, date, organizer, participants)
+
+        # 詠草の追加
+        self.add_tankas(doc, tankas, basePoint=11.0, rubyPoint=6.0, line_spacing=4.0)
+
+        # 保存先のdir作成
+        path = settings.MEDIA_ROOT / 'events' / Path(str(self.pk))
+        path.mkdir(parents=True,exist_ok=True)
+
+        # ドキュメントの保存
+        doc_path = path / f'{title}.docx'
+        doc.save(doc_path)
+
+        # 版番に応じてeisou_docに保存
+        with doc_path.open(mode="rb") as f:
+            if self.eisou_number == 0:
+                self.eisou_doc.save(f'{title}.docx', File(f), save=True)
+            else:
+                self.eisou_doc.save(f'{title}_ver{self.eisou_number+1}.docx', File(f), save=True)
+        self.eisou_number += 1
+        self.save()
+
+        # djangoの動作で名前が変更された時,元のドキュメントファイルを削除
+        if Path(self.eisou_doc.path) != doc_path:
+            doc_path.unlink()
+
+    def add_title(self, doc, title):
+        """タイトルを追加する"""
+        head = doc.paragraphs[0]
+        if title == japanese_strftime(timezone.localtime(self.start_time), '%Y年%m月%d日（%a）の歌会'):
+            head_title = "京大短歌歌会　詠草一覧"
+        else:
+            head_title = title
+        title_run = head.add_run(head_title)
+        title_run.font.size = Pt(14)
+        head.paragraph_format.line_spacing = 1.0
+
+        return doc
+
+    def add_info(self, doc, date, organizer, participants):
+        """参加者情報を追加する"""
+        info = doc.add_paragraph(f'【日付】{date}\n【司会】{organizer}\n')
+        info.runs[0].font.size = Pt(12)
+        participant_names = "、".join([participant.name for participant in participants])
+        parti_run = info.add_run(f'【参加者】{participant_names}')
+        parti_run.font.size = Pt(12)
+        info.paragraph_format.space_after = Pt(20.0)
+
+        return doc
+
+
+    def add_tankas(self, doc, tankas, basePoint=11.0, rubyPoint=6.0, line_spacing=4.0):
+        """詠草を追加する"""
+        body = doc.add_paragraph()
+        random.shuffle(tankas)
+        for i, tanka in enumerate(tankas):
+
+            # 最初以外改行する
+            if i != 0:
+                body.add_run('\n')
+
+            # ルビを振って詠草を追加する
+            body = make_ruby_whole_sentence(
+                    body,
+                    f'{i+1}．{tanka}',
+                    basePoint=basePoint,
+                    rubyPoint=rubyPoint
+                    )
+        body.paragraph_format.line_spacing = line_spacing
+
+        return doc
     
     def save(self, *args, **kwargs):
+        # イベントのタイトルが未設定の場合、自動生成
         if not self.title and self.start_time:
             date = self.start_time
             self.title = japanese_strftime(date, "%Y年%m月%d日（%a）の歌会")
+        # イベントの締切が未設定の場合、開始時刻の3時間前
         if not self.deadline and self.start_time:
             self.deadline = self.start_time - timedelta(hours=3)
+        # イベントの場所が未設定の場合、"未定"
         if not self.location:
             self.location = "未定"
+        # イベントの終了時刻が未設定の場合、開始時刻の3時間後
         if not self.end_time:
             self.end_time = self.start_time + timedelta(hours=3)
+        # イベントの告知説明が未設定の場合、"特になし"
         if not self.ann_desc:
             self.ann_desc = "特になし"
+        #eisou_doc,eisou_pdfのupload_toを設定
+        if self.eisou_doc and self.pk is None:
+            uploaded_file = self.eisou_doc
+            self.eisou_doc = None
+            super().save(*args, **kwargs)
+            self.eisou_doc = uploaded_file
+        if self.eisou_pdf and self.pk is None:
+            uploaded_file = self.eisou_pdf
+            self.eisou_pdf = None
+            super().save(*args, **kwargs)
+            self.eisou_pdf = uploaded_file
+
         super().save(*args, **kwargs)
             
     def __str__(self):
@@ -136,6 +268,7 @@ class Tanka(models.Model):
         User,
         verbose_name="筆名",
         on_delete=models.CASCADE,
+        blank=True,
         null=True,
         )
     guest_author = models.CharField(
@@ -216,6 +349,10 @@ class Participant(models.Model):
         verbose_name="見学者フラグ",
         default=False,
         )
+    
+    @property
+    def name(self):
+        return self.user.name if self.user else self.guest_user
     
     def clean(self):
         if not self.user and self.guest_user == "":
