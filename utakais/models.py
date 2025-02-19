@@ -3,16 +3,20 @@ from datetime import datetime,timedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files import File
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models import UniqueConstraint
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from docx import Document
 from docx.shared import Pt
+from docx2pdf import convert
 import mojimoji
 from pathlib import Path
 from poegrass.utils import japanese_strftime, make_ruby_whole_sentence
+import pypandoc
 import random
+import subprocess
 
 class Event(models.Model):
     title = models.CharField(
@@ -20,6 +24,8 @@ class Event(models.Model):
         max_length=63,
         blank=True,
         )
+    #generate_files内で使うメソッドadd_titleなどで呼び出すために設定
+    default_title = "%Y年%m月%d日（%a）の歌会"
     start_time = models.DateTimeField(
         verbose_name="開始時刻",
         default=timezone.now,
@@ -83,10 +89,12 @@ class Event(models.Model):
     eisou_doc = models.FileField(
         null=True,
         upload_to=file_path,
+        validators=[FileExtensionValidator(['docx'])],
         )
     eisou_pdf = models.FileField(
         null=True,
         upload_to=file_path,
+        validators=[FileExtensionValidator(['pdf'])],
         )
     eisou_number = models.PositiveIntegerField(
         verbose_name="詠草一覧版数",
@@ -133,17 +141,25 @@ class Event(models.Model):
                 raise ValidationError(
                     {'end_time': "終了時刻は開始時刻よりも前にはできません。"}
                 )
+        if self.end_time and not self.rec_is_private:
+            if self.end_time > timezone.now():
+                raise ValidationError(
+                    {'rec_status': "終了時刻より前には記録は公開できません。"}
+                )
             
-    def generate_doc(self):
+    def generate_files(self):
         """
         詠草一覧のdocx,pdfファイルを生成する
         """
+        if self.deadline > timezone.now():
+            raise ValueError("締切が終了していないため、詠草一覧を生成できません。")
         title = self.title
         organizer = self.organizer.name
         date = japanese_strftime(timezone.localtime(self.start_time),"%Y年%m月%d日（%a）")  # 例: イベント日が含まれる場合
         participants = Participant.objects.filter(event=self).exclude(user=self.organizer)
+        participants_and_organizer = Participant.objects.filter(event=self)
         tankas = [
-            f'{tanka.content}' for tanka in (participant.tanka for participant in participants if participant.tanka)
+            f'{participant.tanka.content}' for participant in participants_and_organizer if participant.tanka
         ]
 
         # ドキュメントの作成
@@ -151,13 +167,15 @@ class Event(models.Model):
         doc = Document(sample_path)
 
         # タイトルの追加
-        self.add_title(doc, title)
+        doc = self.add_title(doc, title)
 
         # 参加者の追加
-        self.add_info(doc, date, organizer, participants)
+        doc = self.add_info(doc, date, organizer, participants)
 
         # 詠草の追加
-        self.add_tankas(doc, tankas, basePoint=11.0, rubyPoint=6.0, line_spacing=4.0)
+        # 行間の設定．8首以下なら等間隔に，9首以上なら4.0．
+        line_spacing = 8.0 # float(32 / len(tankas)) if len(tankas) <= 8 else 4.0
+        doc = self.add_tankas(doc, tankas, basePoint=11.0, rubyPoint=6.0, line_spacing=line_spacing)
 
         # 保存先のdir作成
         path = settings.MEDIA_ROOT / 'events' / Path(str(self.pk))
@@ -167,23 +185,59 @@ class Event(models.Model):
         doc_path = path / f'{title}.docx'
         doc.save(doc_path)
 
-        # 版番に応じてeisou_docに保存
+        # PDFの生成
+        pdf_path = path / f'{title}.pdf'
+
+        # LibreOfficeを使ってpdfへ変換
+        # subprocess.run(
+        #     ["/Applications/LibreOffice.app/Contents/MacOS/soffice", 
+        #      "--headless", 
+        #      "--convert-to", "pdf", 
+        #      doc_path, 
+        #      "--outdir", path],
+        # )
+
+        # doc2pdfを使ってpdfへ変換
+        convert(doc_path,pdf_path)
+
+        # pandocを使ってpdfへ変換
+        # pypandoc.convert_file(
+        #     doc_path,
+        #     'pdf',
+        #     outputfile=pdf_path,
+        #     extra_args=[
+        #         "--pdf-engine=lualatex",
+        #         "-V", "documentclass=ltjsarticle",
+        #         "-V", "luatexjapresetoptions=hiragino-pron"
+        #     ]
+        # )
+
+        # 版番に応じてファイル名を決定
+        if self.eisou_number == 0:
+            file_name = title
+        else:
+            file_name = f'{title}_ver{self.eisou_number+1}'
+
+        # eisou_doc,eisou_pdfに保存
         with doc_path.open(mode="rb") as f:
-            if self.eisou_number == 0:
-                self.eisou_doc.save(f'{title}.docx', File(f), save=True)
-            else:
-                self.eisou_doc.save(f'{title}_ver{self.eisou_number+1}.docx', File(f), save=True)
+            self.eisou_doc.save(f'{file_name}.docx', File(f), save=True)
+        with pdf_path.open(mode="rb") as f:
+            self.eisou_pdf.save(f'{file_name}.pdf', File(f), save=True)
         self.eisou_number += 1
         self.save()
 
-        # djangoの動作で名前が変更された時,元のドキュメントファイルを削除
+        # djangoの動作で名前が変更された時,元のファイルを削除
         if Path(self.eisou_doc.path) != doc_path:
             doc_path.unlink()
+        if Path(self.eisou_pdf.path) != pdf_path:
+            pdf_path.unlink()
+
+        return doc_path, pdf_path
 
     def add_title(self, doc, title):
         """タイトルを追加する"""
         head = doc.paragraphs[0]
-        if title == japanese_strftime(timezone.localtime(self.start_time), '%Y年%m月%d日（%a）の歌会'):
+        if title == japanese_strftime(timezone.localtime(self.start_time), self.default_title):
             head_title = "京大短歌歌会　詠草一覧"
         else:
             head_title = title
@@ -210,7 +264,6 @@ class Event(models.Model):
         body = doc.add_paragraph()
         random.shuffle(tankas)
         for i, tanka in enumerate(tankas):
-
             # 最初以外改行する
             if i != 0:
                 body.add_run('\n')
@@ -230,7 +283,7 @@ class Event(models.Model):
         # イベントのタイトルが未設定の場合、自動生成
         if not self.title and self.start_time:
             date = self.start_time
-            self.title = japanese_strftime(date, "%Y年%m月%d日（%a）の歌会")
+            self.title = japanese_strftime(date, self.default_title)
         # イベントの締切が未設定の場合、開始時刻の3時間前
         if not self.deadline and self.start_time:
             self.deadline = self.start_time - timedelta(hours=3)
@@ -272,7 +325,7 @@ class Tanka(models.Model):
         null=True,
         )
     guest_author = models.CharField(
-        verbose_name="ゲスト筆名",
+        verbose_name="筆名",
         default="",
         max_length=63,
         blank=True,
@@ -298,6 +351,10 @@ class Tanka(models.Model):
             raise ValidationError(
                 {'guest_author':"ログインするかゲスト筆名を入力してください。"}
             )
+        if self.content == "":
+            raise ValidationError(
+                {'content':"詠草を入力してください．"}
+            )
         
     def save(self,*args,**kwargs):
         if self.author:
@@ -322,17 +379,20 @@ class Tanka(models.Model):
 class Participant(models.Model):
     user = models.ForeignKey(
         User,
-        verbose_name="参加者",
+        verbose_name="名前",
         on_delete=models.CASCADE,
+        blank=True,
         null=True,
         )
     guest_user = models.CharField(
-        verbose_name="ゲスト参加者",
-        default = "",
+        verbose_name="名前",
+        blank = True,
         max_length=63,
     )
     guest_contact = models.EmailField(
-        verbose_name="ゲスト参加者のメールアドレス",
+        verbose_name="メールアドレス",
+        blank = True,
+        null=True,
     )
     event = models.ForeignKey(
         Event,
@@ -345,6 +405,12 @@ class Participant(models.Model):
         null=True,
         on_delete=models.SET_NULL,
     )
+    message = models.TextField(
+        verbose_name="備考欄",
+        default="",
+        blank=True,
+        max_length=200,
+    )
     is_observer = models.BooleanField(
         verbose_name="見学者フラグ",
         default=False,
@@ -355,24 +421,26 @@ class Participant(models.Model):
         return self.user.name if self.user else self.guest_user
     
     def clean(self):
-        if not self.user and self.guest_user == "":
-            raise ValidationError(
-                {'guest_user': "ログインするかゲスト筆名を記入してください。"}
-            )
-        if self.tanka and self.user:
-            if self.tanka.author != self.user and self.tanka.guest_author != self.user.name :
-                raise ValidationError(
-                    {'tanka':"詠草の筆名と参加者は一致していなければいけません。"}
-                )
-        if self.tanka and self.guest_user:
-            if self.tanka.author.name != self.guest_user and self.tanka.guest_author != self.guest_user:
-                raise ValidationError(
-                    {'tanka':"詠草の筆名と参加者は一致していなければいけません。"}
-                )
+        print("cleanが実行されました．")
+        if not self.user:
+            if self.guest_user == "":
+                raise ValidationError({'guest_user':"ログインするか筆名を入力してください。"})
+            if not self.guest_contact:
+                raise ValidationError({'guest_contact':"ログインするかメールアドレスを入力してください。"})
+            
+        if self.tanka:
+            if self.user:
+                if self.tanka.author != self.user:
+                    raise ValidationError({'tanka': "詠草の筆名と参加者は一致していなければいけません。"})
+            elif self.guest_user:
+                if self.tanka.guest_author != self.guest_user:
+                    raise ValidationError({'tanka': "詠草の筆名と参加者は一致していなければいけません。"})
 
     def save(self,*args,**kwargs):
         if self.user:
             self.guest_user = ""
+        if not self.user:
+            self.is_observer = True
         super().save(*args,**kwargs)
 
     class Meta:

@@ -25,7 +25,7 @@ class SignupView(CreateView):
     
     def get_success_url(self):
         next_url = self.request.GET.get("next")
-        return next_url if next_url else reverse_lazy("{% url 'home' %}")
+        return next_url if next_url else reverse_lazy('utakais:events_index')
     
 class LoginView(BaseLoginView):
     form_class = LoginForm

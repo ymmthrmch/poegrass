@@ -1,7 +1,6 @@
 import datetime
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt
 import re
 
 def japanese_strftime(date,format_str):
@@ -79,8 +78,8 @@ def make_normal_run(text, point=11.0):
 
 def make_ruby_whole_sentence(paragraph,text,basePoint=11.0,rubyPoint=6.0):
     """ルビ付きのrunを生成しparagraphに格納する関数"""
-    tagA_pattern = r"<tagA>(.*?)</tagA>"
-    tagB_pattern = r"<tagB>(.*?)</tagB>"
+    tagA_pattern = r"<ruby>(.*?)</ruby>" # タグA．baseTextとrubyTextを囲む
+    tagB_pattern = r"<rt>(.*?)</rt>" # タグB．rubyTextを囲む
     
     run_list = []
     
@@ -88,13 +87,14 @@ def make_ruby_whole_sentence(paragraph,text,basePoint=11.0,rubyPoint=6.0):
     cursor_A = 0
     for match_A in re.finditer(tagA_pattern, text):
         # タグAの前の部分を追加
-        run = make_normal_run(text[cursor_A:match_A.start()],basePoint=basePoint)
+        run = make_normal_run(text[cursor_A:match_A.start()],point=basePoint)
         run_list.append(run)
 
         # タグAの中身をタグBで処理
         cursor_B = 0
-        for match_B in re.finditer(tagB_pattern, match_A.group(1)):
-            baseText = text[cursor_B:match_B.start()]
+        group_text = match_A.group(1)
+        for match_B in re.finditer(tagB_pattern, group_text):
+            baseText = group_text[cursor_B:match_B.start()]
             rubyText = match_B.group(1)
             run = make_ruby_run(baseText, rubyText, basePoint=basePoint, rubyPoint=rubyPoint)
             run_list.append(run)
@@ -110,4 +110,3 @@ def make_ruby_whole_sentence(paragraph,text,basePoint=11.0,rubyPoint=6.0):
         run._r.append(run_item)
 
     return paragraph
-

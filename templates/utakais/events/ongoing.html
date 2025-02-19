@@ -13,6 +13,11 @@
 {% endblock %}
 
 {% block content %}
+    {% if user.is_authenticated and event.organizer and user == event.organizer %}
+    <div>
+        <a href="{% url 'utakais:event_admin' pk=event.pk %}">歌会管理へ</a>
+    </div>
+    {% endif %}
     <div>
         司会者：{{ event.organizer.name }}<br>
         開始日時：{{ event.start_time }}<br>
@@ -20,5 +25,8 @@
         詠草提出締切：{{ event.deadline }}<br>
         コメント：{{ event.ann_desc }}
     </div>
-    
+    <div>
+        <a href="{% url 'utakais:download_eisou_file' pk=event.pk file_type='eisou_doc' %}">Download document</a>
+        <a href="{% url 'utakais:download_eisou_file' pk=event.pk file_type='eisou_pdf' %}">Download PDF</a>
+    </div>
 {% endblock %}

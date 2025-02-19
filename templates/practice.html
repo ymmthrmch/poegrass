@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block head_title %}
+{% endblock %}
+
+{% block body_title %}
+の歌会
+{% endblock %}
+
+{% block content %}
+<form method="POST">
+    {% csrf_token %}
+    {{ tanka_form.as_p }}
+    {{ participant_form.as_p }}
+    {% if joined %}
+        <p>参加表明済み。再提出で詠草を修正できます。</p>
+    {% endif %}
+    <button type="submit">提出</button>
+    {% if joined %}
+        <button type="submit" name="delete">参加取消</button>
+    {% endif %}
+</form>
+{% endblock %}

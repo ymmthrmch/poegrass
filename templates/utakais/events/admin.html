@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block head_title %}
+歌会管理
+{% endblock %}
+{% block body_title %}
+    <h1>
+        歌会管理
+    </h1>
+{% endblock %}
+{% block content %}
+    <div>
+        <a href="{% url 'utakais:event_detail' pk=event.pk %}">戻る</a>
+    </div>
+    <form method="post">
+        {% csrf_token %}
+        {{ event_form.as_p }}
+            
+        <h3>参加者情報</h3>
+        {{ participant_formset.management_form }}
+        
+        <table border="1">
+        {% for form in participant_formset %}
+            <tr>
+                <td>
+                    <p>参加者:{{ form.instance.name }}</p>
+                    {% if not form.instance.user %}
+                        <p>連絡先: {{ form.instance.guest_contact }}</p>
+                    {% endif %}
+                </td>
+                <td>
+                    <p>{{ form.instance.tanka }}</p>
+                </td>
+                <td>
+                    削除{{ form.DELETE }}
+                </td>
+            </tr>
+        {% endfor %}
+        </table>
+        <div>
+            <a href="{% url 'utakais:execute_method'
+                app_name='utakais'
+                model_name='Event'
+                pk=event.pk
+                method_name='generate_files'
+                %}">
+                {% if event.eisou_number == 0 %}
+                    詠草一覧を生成
+                {% else %}
+                    詠草一覧を再生成
+                {% endif %}
+            </a>
+        </div>
+        <button type="submit">更新</button>
+    </form>
+{% endblock %}
