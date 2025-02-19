@@ -15,12 +15,39 @@
     <form method="post">
         {% csrf_token %}
         {{ event_form.as_p }}
-            
+
         <h3>参加者情報</h3>
         {{ participant_formset.management_form }}
-        
+
         <table border="1">
-        {% for form in participant_formset %}
+            {{ formset.non_form_errors.as_ul }}
+            <table id="formset" class="form">
+            {% for form in participant_formset.forms %}
+              {% if forloop.first %}
+              <thead><tr>
+                {% for field in form.visible_fields %}
+                <th>{{ field.label|capfirst }}</th>
+                {% endfor %}
+              </tr></thead>
+              {% endif %}
+              <tr class="{% cycle row1 row2 %}">
+              {% for field in form.visible_fields %}
+                <td>
+                {# Include the hidden fields in the form #}
+                {% if forloop.first %}
+                  {% for hidden in form.hidden_fields %}
+                  {{ hidden }}
+                  {% endfor %}
+                {% endif %}
+                  {{ field.errors.as_ul }}
+                  {{ field }}
+                </td>
+              {% endfor %}
+              </tr>
+            {% endfor %}
+            </table>
+
+        <!-- {% for form in participant_formset %}
             <tr>
                 <td>
                     <p>参加者:{{ form.instance.name }}</p>
@@ -35,7 +62,7 @@
                     削除{{ form.DELETE }}
                 </td>
             </tr>
-        {% endfor %}
+        {% endfor %} -->
         </table>
         <div>
             <a href="{% url 'utakais:execute_method'

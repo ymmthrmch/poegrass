@@ -1,29 +1,24 @@
-from .forms import EventForm, TankaForm, ParticipantForm, ParticipantFormSet
-from .models import Event, Participant, Tanka
+from pathlib import Path
+
 from django import forms
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.files.storage import default_storage
-from django.db.models import Q
-from django.http import JsonResponse, HttpResponseNotFound, FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import (
     CreateView,
     DetailView,
     FormView,
     ListView,
-    TemplateView,
 )
 from django.views.generic.edit import UpdateView
-from docx.shared import Pt
-import json
-from pathlib import Path
-from poegrass.utils import japanese_strftime
-import utakais
+
+from .forms import EventForm, ParticipantForm, ParticipantFormSet, TankaForm
+from .models import Event, Participant, Tanka
 
 
 class EventIndexView(ListView):
@@ -265,37 +260,19 @@ class EventAdminView(UpdateView):
             context["participant_formset"] = ParticipantFormSet(
                 self.request.POST, instance=event
             )
-            print(f"post: {ParticipantFormSet(instance=event).queryset}")
         else:
-            print(f"get: {ParticipantFormSet(instance=event).queryset}")
             context["participant_formset"] = ParticipantFormSet(instance=event)
 
         return context
 
     def form_valid(self, form):
         context = self.get_context_data()
-        participant_formset = context["participant_formset"]
+        participant_formset: forms.BaseInlineFormSet = context["participant_formset"]
 
-        print(participant_formset.is_valid())
-        from pprint import pprint
-        pprint(participant_formset.data.dict())
+        self.object = form.save()
+        participant_formset.save()
 
-        print(participant_formset.queryset)
-
-        if participant_formset.is_valid():
-            print("こんにちは")
-            self.object = form.save()
-            participant_formset.instance = self.object
-            participant_formset.save()
-            return super().form_valid(form)
-        else:
-            print(participant_formset.errors)
-            print("こんばんは")
-            return self.render_to_response(
-                self.get_context_data(
-                    form=form,
-                )
-            )
+        return super().form_valid(form)
 
 
 def download_eisou_file(request, pk, file_type):
