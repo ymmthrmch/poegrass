@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block head_title %}
+    <title>歌会記録</title>
+{% endblock %}
+
+{% block body_title %}
+    <h1>{{ event.title }}</h1>
+{% endblock %}
+
+{% block content %}
+    {% if user.is_authenticated and event.organizer and user == event.organizer %}
+    <div>
+        <a href="{% url 'utakais:event_admin' pk=event.pk %}">歌会管理へ</a>
+    </div>
+    {% endif %}
+    <div>
+        司会者：{{ event.organizer.name }}<br>
+        開始日時：{{ event.start_time }}<br>
+        場所：{{ event.location }}<br>
+        コメント：{{ event.rec_desc }}
+    </div>
+    <div>
+        <ul>
+            {% if public_tanka %}
+            <h3>公開詠草一覧</h3>
+            {% for tanka in public_tanka %}
+            <li>
+                {{ tanka.content }}{{ tanka.author.name }}
+            </li>
+            {% endfor %}
+            {% else %}
+            <p>公開詠草はありません。</p>
+            {% endif %}
+            {% if user.is_authenticated and user.is_member and limited_tanka %}
+            <h3>限定公開詠草一覧</h3>
+            {% for tanka in limited_tanka %}
+            <li>
+                {{ tanka.content }}{{ tanka.author.name }}
+            </li>
+            {% endfor %}
+            {% endif %}
+        </ul>
+    </div>
+{% endblock %}

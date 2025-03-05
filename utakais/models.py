@@ -88,11 +88,13 @@ class Event(models.Model):
         return f"events/{instance.pk}/{filename}"
 
     eisou_doc = models.FileField(
+        blank=True,
         null=True,
         upload_to=file_path,
         validators=[FileExtensionValidator(["docx"])],
     )
     eisou_pdf = models.FileField(
+        blank=True,
         null=True,
         upload_to=file_path,
         validators=[FileExtensionValidator(["pdf"])],
@@ -305,6 +307,9 @@ class Event(models.Model):
         # イベントの告知説明が未設定の場合、"特になし"
         if not self.ann_desc:
             self.ann_desc = "特になし"
+        # 記録が公開される場合、告知は非公開
+        if self.rec_status == "public" or self.rec_status == "limited":
+            self.ann_status = "private"
         # eisou_doc,eisou_pdfのupload_toを設定
         if self.eisou_doc and self.pk is None:
             uploaded_file = self.eisou_doc

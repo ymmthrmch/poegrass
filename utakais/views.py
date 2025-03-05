@@ -35,6 +35,20 @@ class EventIndexView(ListView):
         return queryset
 
 
+class EventCreateView(CreateView):
+    model = Event
+    template_name = "utakais/events/create.html"
+    form_class = EventForm
+
+    def form_valid(self, form):
+        event = form.save(commit=False)
+        event.organizer = self.request.user
+        event.save()
+        return super().form_valid(form)
+
+    success_url = reverse_lazy("utakais:events_index")
+
+
 def change_event_view(request, pk):
     """
     歌会の公開非公開などによって表示するビューを変える。
@@ -45,21 +59,29 @@ def change_event_view(request, pk):
     """
     event = get_object_or_404(Event, pk=pk)
     user = request.user
-    if event.ann_status == "public":
-        if event.deadline > timezone.now():
-            return EventDetailView.as_view()(request, pk=pk)
-        else:
-            return EventOngoingView.as_view()(request, pk=pk)
-    elif event.ann_status == "limited":
+    if event.rec_is_public:
+        return EventRecordView.as_view()(request, pk=pk)
+    elif event.rec_is_limited:
         if user.is_authenticated and user.is_member:
+            return EventRecordView.as_view()(request, pk=pk)
+        else:
+            return event_not_found(request)
+    elif event.rec_is_private:
+        if event.ann_is_public:
             if event.deadline > timezone.now():
                 return EventDetailView.as_view()(request, pk=pk)
             else:
                 return EventOngoingView.as_view()(request, pk=pk)
-        else:
-            return event_not_found
-    elif event.ann_status == "private":
-        return event_not_found(request)
+        elif event.ann_is_limited:
+            if user.is_authenticated and user.is_member:
+                if event.deadline > timezone.now():
+                    return EventDetailView.as_view()(request, pk=pk)
+                else:
+                    return EventOngoingView.as_view()(request, pk=pk)
+            else:
+                return event_not_found
+        elif event.ann_is_private:
+            return event_not_found(request)
 
 
 def event_not_found(request):
@@ -115,11 +137,14 @@ class EventDetailView(FormView):
                     event=event,
                 )
 
-                if not created and participant.tanka:
-                    participant.tanka.delete()
+                if not created:
+                    messages.success(self.request, "再提出しました。")
+                    if participant.tanka:
+                        participant.tanka.delete()
+                else:
+                    messages.success(self.request, "提出しました。")
 
                 participant.message = participant_form.cleaned_data["message"]
-                messages.success(self.request, "再提出しました。")
 
             else:
                 participant = participant_form.save(commit=False)
@@ -200,13 +225,6 @@ class EventDetailView(FormView):
         return success_url
 
 
-class EventCreateView(CreateView):
-    model = Event
-    template_name = "utakais/events/create.html"
-    form_class = EventForm
-    success_url = reverse_lazy("utakais:events_index")
-
-
 class EventOngoingView(DetailView):
     model = Event
     template_name = "utakais/events/ongoing.html"
@@ -228,6 +246,18 @@ class EventOngoingView(DetailView):
         else:
             event.generate_files()
         return super().get(request, *args, **kwargs)
+
+
+class EventRecordView(DetailView):
+    model = Event
+    template_name = "utakais/events/record.html"
+
+    def get_context_data(self, **kwargs):
+        print("ここ")
+        context = super().get_context_data(**kwargs)
+        context['public_participants'] = Participant.objects.filter(event=self.object, tanka__status="public")
+        context['limited_participants'] = Participant.objects.filter(event=self.object, tanka__status="limited")
+        return context
 
 
 class EventAdminView(UpdateView):
